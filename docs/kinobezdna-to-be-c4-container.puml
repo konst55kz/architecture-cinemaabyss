@@ -1,0 +1,104 @@
+@startuml kinobezdna-to-be-c4-container
+' C4 Container diagram: To-Be архитектура онлайн-кинотеатра «Кинобездна»
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_TOP_DOWN()
+
+title «Кинобездна» — To-Be архитектура (C4, уровень контейнеров)
+
+AddElementTag("gateway", $bgColor="#c2185b", $borderColor="#880e4f", $legendText="Единая точка входа")
+AddElementTag("broker", $bgColor="#ef6c00", $borderColor="#e65100", $legendText="Брокер сообщений")
+AddRelTag("async", $textColor="#e65100", $lineColor="#e65100", $lineStyle=DashedLine(), $legendText="Асинхронно (события)")
+
+Person(user, "Пользователь", "Смотрит фильмы, оформляет подписку, оценивает фильмы, ведёт избранное")
+
+System_Boundary(kb, "Онлайн-кинотеатр «Кинобездна»") {
+
+  Container(client, "Клиентское приложение", "Web / Mobile / Smart TV", "Интерфейс пользователя на любом устройстве")
+
+  Container(gw, "API Gateway", "Kong / NGINX", "Единая точка входа: маршрутизация к доменным сервисам, проверка JWT, rate limiting, TLS, логирование", $tags="gateway")
+
+  Boundary(d_users, "Домен «Пользователи»") {
+    Container(auth, "User & Auth Service", "Go + Keycloak", "Регистрация, аутентификация, профили, выдача JWT")
+    ContainerDb(auth_db, "Users DB", "PostgreSQL", "Пользователи, профили, роли")
+  }
+
+  Boundary(d_billing, "Домен «Биллинг»") {
+    Container(subs, "Subscription Service", "Go", "Тарифы, оформление и продление подписок, проверка доступа")
+    ContainerDb(subs_db, "Subscriptions DB", "PostgreSQL", "Подписки, тарифы")
+    Container(discount, "Discount Service", "Go", "Скидки, промокоды, акции")
+    ContainerDb(discount_db, "Discounts DB", "PostgreSQL", "Скидки, промокоды")
+    Container(payment, "Payment Service", "Go", "Проведение платежей, возвраты, статусы")
+    ContainerDb(payment_db, "Payments DB", "PostgreSQL", "Платежи, транзакции")
+  }
+
+  Boundary(d_content, "Домен «Контент»") {
+    Container(movies, "Movies Service", "Go", "Каталог и метаданные фильмов (жанры, актёры, описания), поиск, хранение и выдача видео, интеграция с внешними источниками контента")
+    ContainerDb(movies_db, "Movies DB", "PostgreSQL", "Фильмы, жанры, актёры")
+    ContainerDb(search, "Search Index", "Elasticsearch", "Полнотекстовый поиск по каталогу")
+    ContainerDb(video_storage, "Video Storage", "S3 (object storage)", "Видеофайлы и превью")
+  }
+
+  Boundary(d_activity, "Домен «Пользовательская активность»") {
+    Container(rating, "Rating & Favorites Service", "Go", "Оценки фильмов, папки избранного, история просмотров")
+    ContainerDb(rating_db, "Activity DB", "PostgreSQL", "Оценки, избранное, история")
+  }
+
+  Boundary(d_integration, "Домен «Интеграции»") {
+    Container(reco_adapter, "Recommendation Service", "Go", "Отдаёт подборки клиентам, кеширует их, передаёт события во внешнюю рекомендательную систему")
+    ContainerDb(reco_cache, "Recommendations Cache", "Redis", "Готовые подборки по пользователям")
+  }
+
+  ContainerQueue(kafka, "Message Broker", "Apache Kafka", "Доменные события: user.registered, payment.completed, subscription.changed, movie.rated, movie.watched", $tags="broker")
+}
+
+System_Ext(reco_ext, "Рекомендательная система", "Сторонний сервис подборок")
+System_Ext(pay_ext, "Платёжные системы", "Эквайринг, банки, кошельки")
+System_Ext(content_ext, "Внешние сервисы и открытые источники", "Источники контента для агрегатора")
+
+' --- Пользователь и клиент
+Rel(user, client, "Использует")
+Rel(client, gw, "API-запросы", "HTTPS / REST")
+
+' --- API Gateway -> доменные сервисы (синхронно)
+Rel(gw, auth, "Логин, проверка токена", "REST")
+Rel(gw, movies, "Каталог, поиск, воспроизведение", "REST")
+Rel(gw, subs, "Подписки", "REST")
+Rel(gw, payment, "Оплата", "REST")
+Rel(gw, rating, "Оценки, избранное", "REST")
+Rel(gw, reco_adapter, "Подборки", "REST")
+
+' --- Сервисы и их БД
+Rel(auth, auth_db, "Читает/пишет", "SQL")
+Rel(subs, subs_db, "Читает/пишет", "SQL")
+Rel(discount, discount_db, "Читает/пишет", "SQL")
+Rel(payment, payment_db, "Читает/пишет", "SQL")
+Rel(movies, movies_db, "Читает/пишет", "SQL")
+Rel(movies, search, "Индексирует, ищет", "REST")
+Rel(movies, video_storage, "Читает/пишет", "S3 API")
+Rel(rating, rating_db, "Читает/пишет", "SQL")
+Rel(reco_adapter, reco_cache, "Читает/пишет", "RESP")
+
+' --- Синхронные межсервисные вызовы
+Rel(subs, discount, "Рассчитывает цену со скидкой", "gRPC")
+Rel(subs, payment, "Инициирует оплату", "gRPC")
+Rel(movies, subs, "Проверяет доступ к контенту", "gRPC")
+
+' --- Внешние системы
+Rel(payment, pay_ext, "Проводит платежи", "HTTPS")
+Rel(pay_ext, payment, "Callback о статусе", "HTTPS / webhook")
+Rel(movies, content_ext, "Получает контент", "HTTPS")
+Rel(reco_adapter, reco_ext, "Запрашивает подборки", "HTTPS")
+
+' --- Асинхронное взаимодействие через Kafka
+Rel(auth, kafka, "user.registered", "Kafka", $tags="async")
+Rel(payment, kafka, "payment.completed / failed", "Kafka", $tags="async")
+Rel(subs, kafka, "subscription.changed", "Kafka", $tags="async")
+Rel(rating, kafka, "movie.rated, favorite.added", "Kafka", $tags="async")
+Rel(movies, kafka, "movie.watched", "Kafka", $tags="async")
+Rel(kafka, subs, "payment.*", "Kafka", $tags="async")
+Rel(kafka, reco_adapter, "movie.rated, movie.watched", "Kafka", $tags="async")
+Rel(reco_adapter, reco_ext, "Передаёт события пользователей", "Kafka / HTTPS", $tags="async")
+
+SHOW_LEGEND()
+@enduml
