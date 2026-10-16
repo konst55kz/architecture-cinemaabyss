@@ -57,12 +57,16 @@ spec:
           name: leader-election
         resources:
           requests:
-            memory: "256Mi"
+            memory: "512Mi"
             cpu: "100m"
           limits:
-            memory: "512Mi"
+            memory: "1Gi"
             cpu: "500m"
         env:
+        - name: ZK_SERVER_HEAP
+          value: "256"
+        - name: JVMFLAGS
+          value: "-Xmx256m -Xms128m"
         - name: ZOOKEEPER_CLIENT_PORT
           value: "2181"
         - name: ZOOKEEPER_TICK_TIME

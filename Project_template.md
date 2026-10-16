@@ -231,10 +231,28 @@ cat .docker/config.json | base64
   ```
   Часть тестов с health-чек упадет, но создание событий отработает.
   Откройте логи event-service и сделайте скриншот обработки событий
+  
 
 #### Шаг 3
-Добавьте сюда скриншота вывода при вызове https://cinemaabyss.example.com/api/movies и  скриншот вывода event-service после вызова тестов.
 
+Добавьте сюда скриншота вывода при вызове https://cinemaabyss.example.com/api/movies
+
+![скриншота вывода](docs/images/movies.png)
+
+вывод event-service после вызова тестов.
+
+PS C:\Projects\practicum.yandex\architecture-cinemaabyss\tests\postman> kubectl logs -n cinemaabyss deployment/events-service
+2026/10/16 06:22:15 Kafka is ready
+2026/10/16 06:22:15 Events service starting on port 8082, kafka broker: kafka:9092
+2026/10/16 06:22:15 [CONSUMER] Listening on topic=user-events group=events-service-users
+2026/10/16 06:22:15 [CONSUMER] Listening on topic=payment-events group=events-service-payments
+2026/10/16 06:22:15 [CONSUMER] Listening on topic=movie-events group=events-service-movies
+2026/10/16 06:47:06 [PRODUCER] topic=movie-events payload={"movie_id":6,"user_id":4,"title":"Test Movie Event","action":"viewed","timestamp":"2026-10-16T06:47:05Z"}
+2026/10/16 06:47:06 [CONSUMER] topic=movie-events partition=0 offset=0 key=movie-events value={"movie_id":6,"user_id":4,"title":"Test Movie Event","action":"viewed","timestamp":"2026-10-16T06:47:05Z"}
+2026/10/16 06:47:07 [PRODUCER] topic=user-events payload={"user_id":4,"username":"testuser","action":"logged_in","timestamp":"2026-10-16T06:47:06.804Z"}
+2026/10/16 06:47:07 [CONSUMER] topic=user-events partition=0 offset=0 key=user-events value={"user_id":4,"username":"testuser","action":"logged_in","timestamp":"2026-10-16T06:47:06.804Z"}
+2026/10/16 06:47:09 [PRODUCER] topic=payment-events payload={"payment_id":4,"user_id":4,"amount":9.99,"status":"completed","timestamp":"2026-10-16T06:47:08.020Z","method_type":"credit_card"}
+2026/10/16 06:47:09 [CONSUMER] topic=payment-events partition=0 offset=0 key=payment-events value={"payment_id":4,"user_id":4,"amount":9.99,"status":"completed","timestamp":"2026-10-16T06:47:08.020Z","method_type":"credit_card"}
 
 # Задание 4
 Для простоты дальнейшего обновления и развертывания вам как архитектуру необходимо так же реализовать helm-чарты для прокси-сервиса и проверить работу 
@@ -309,6 +327,11 @@ minikube tunnel
 Потом вызовите 
 https://cinemaabyss.example.com/api/movies
 и приложите скриншот развертывания helm и вывода https://cinemaabyss.example.com/api/movies
+
+![helm](docs/images/helm.png)
+
+![скриншота вывода](docs/images/movies-4.png)
+
 
 ## Удаляем все
 
